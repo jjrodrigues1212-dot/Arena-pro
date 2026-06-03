@@ -23,7 +23,12 @@ function calcularPoisson(media, k) {
 
 app.get('/api/analytics', async (req, res) => {
     try {
-        const hoje = new Date().toISOString().split('T')[0];
+        // Força o fuso horário correto de Brasília (UTC-3) para evitar problemas na nuvem
+        const dataBrasil = new Date(new Date().toLocaleString("en-US", {timeZone: "America/Sao_Paulo"}));
+        const ano = dataBrasil.getFullYear();
+        const mes = String(dataBrasil.getMonth() + 1).padStart(2, '0');
+        const dia = String(dataBrasil.getDate()).padStart(2, '0');
+        const hoje = `${ano}-${mes}-${dia}`;
         
         const respostaJogos = await axios.get(`${API_URL}/fixtures?date=${hoje}`, {
             headers: { 'x-apisports-key': API_KEY }
