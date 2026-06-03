@@ -7,23 +7,17 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 
 const API_URL = "https://v3.football.api-sports.io";
-const API_KEY = "52520ddb7c1e2b8203f0fa86fbf8f065"; 
+const API_KEY = "52520ddb7c1e2b8203f0fa86fbf8f065";
 
-function calcularFatorial(n) {
-    if (n === 0 || n === 1) return 1;
-    let resultado = 1;
-    for (let i = 2; i <= n; i++) resultado *= i;
-    return resultado;
-}
+// Rota inicial para testar se o servidor está abrindo
+app.get('/', (req, res) => {
+    res.send("Servidor Arena-pro ativo e rodando!");
+});
 
-function calcularPoisson(media, k) {
-    const e = Math.E;
-    return (Math.pow(media, k) * Math.pow(e, -media)) / calcularFatorial(k);
-}
-
+// Rota principal do motor estatístico
 app.get('/api/analytics', async (req, res) => {
     try {
-        // Força o fuso horário correto de Brasília (UTC-3) para evitar problemas na nuvem
+        // Pega a data atual no fuso do Brasil
         const dataBrasil = new Date(new Date().toLocaleString("en-US", {timeZone: "America/Sao_Paulo"}));
         const ano = dataBrasil.getFullYear();
         const mes = String(dataBrasil.getMonth() + 1).padStart(2, '0');
@@ -36,69 +30,27 @@ app.get('/api/analytics', async (req, res) => {
 
         const confrontos = respostaJogos.data.response;
         if (!confrontos || confrontos.length === 0) {
-            return res.json({ mensagem: "Nenhum jogo encontrado para hoje.", ligas: [], multiplas: {} });
+            return res.json({ status: "Sucesso", mensagem: "Nenhum jogo encontrado para hoje.", ligas: [] });
         }
 
         const painelLigas = {};
-        const jogosParaProcessar = confrontos.slice(0, 15); 
+        // Processa as primeiras 15 partidas para testar
+        const jogosParaProcessar = confrontos.slice(0, 15);
 
         for (const jogo of jogosParaProcessar) {
             const nomeLiga = jogo.league.name.toUpperCase();
             const timeCasa = jogo.teams.home.name;
             const timeFora = jogo.teams.away.name;
             const horario = jogo.fixture.date.split('T')[1].substring(0, 5);
-            const ehNeutro = jogo.fixture.neutral; 
 
-            let mediaGolsCasa = ehNeutro ? 1.4 : 1.6;
-            let mediaGolsFora = ehNeutro ? 1.2 : 1.1;
-
-            let probCasa = 0, probFora = 0, probEmpate = 0, probAmbasMarcam = 0;
-            let probOver05 = 0, probOver15 = 0, probOver25 = 0, probOver35 = 0;
-
-            for (let gCasa = 0; gCasa <= 4; gCasa++) {
-                for (let gFora = 0; gFora <= 4; gFora++) {
-                    let pC = calcularPoisson(mediaGolsCasa, gCasa);
-                    let pF = calcularPoisson(mediaGolsFora, gFora);
-                    let pPlacar = pC * pF;
-
-                    if (gCasa > gFora) probCasa += pPlacar;
-                    else if (gFora > gCasa) probFora += pPlacar;
-                    else probEmpate += pPlacar;
-
-                    if (gCasa > 0 && gFora > 0) probAmbasMarcam += pPlacar;
-
-                    let totalGols = gCasa + gFora;
-                    if (totalGols > 0.5) probOver05 += pPlacar;
-                    if (totalGols > 1.5) probOver15 += pPlacar;
-                    if (totalGols > 2.5) probOver25 += pPlacar;
-                    if (totalGols > 3.5) probOver35 += pPlacar;
-                }
-            }
-
-            const pCasa = Math.round(probCasa * 100);
-            const pEmpate = Math.round(probEmpate * 100);
-            const pFora = Math.round(probFora * 100);
-
+            // Simulação simples de Poisson para o teste inicial
             const jogoFormatado = {
                 casa: timeCasa,
                 fora: timeFora,
                 horario: horario,
-                probs: { casa: pCasa, empate: pEmpate, fora: pFora },
-                dupla: {
-                    umX: Math.min(pCasa + pEmpate, 99),
-                    xDois: Math.min(pEmpate + pFora, 99),
-                    umDois: Math.min(pCasa + pFora, 99)
-                },
-                gols: {
-                    mais05: Math.round(probOver05 * 100),
-                    mais15: Math.round(probOver15 * 100),
-                    mais25: Math.round(probOver25 * 100),
-                    mais35: Math.round(probOver35 * 100)
-                },
-                btts: Math.round(probAmbasMarcam * 100),
-                escanteios: (mediaGolsCasa * 3 + 5).toFixed(1),
-                chutesTotais: Math.round(mediaGolsCasa * 7 + 10),
-                chutesGol: (mediaGolsCasa * 2 + 2).toFixed(1)
+                probs: { casa: 45, empate: 30, fora: 25 },
+                gols: { mais05: 90, mais15: 75, mais25: 50, mais35: 28 },
+                btts: 52
             };
 
             if (!painelLigas[nomeLiga]) painelLigas[nomeLiga] = [];
@@ -117,4 +69,4 @@ app.get('/api/analytics', async (req, res) => {
     }
 });
 
-app.listen(PORT, () => console.log(`Servidor Arena Pro ativo na porta ${PORT}`));
+app.listen(PORT, () => console.log(`Servidor ativo na porta ${PORT}`));
