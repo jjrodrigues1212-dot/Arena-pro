@@ -2,16 +2,18 @@ const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
 const app = express();
+const PORT = process.env.PORT || 3000;
+
 app.use(cors());
 
 const API_KEY = "52520ddb7c1e2b8203f0fa86fe81ba40";
 const API_URL = "https://v3.football.api-sports.io";
 
-// Variáveis de Congelamento
+// Variáveis de Estado para congelar os dados
 let dadosCongelados = null;
 let dataDoCongelamento = null;
 
-// Funções Matemáticas
+// Motor Matemático de Poisson
 function calcularFatorial(n) {
     if (n === 0 || n === 1) return 1;
     let res = 1;
@@ -26,46 +28,50 @@ function calcularPoisson(media, k) {
 app.get('/api/analytics', async (req, res) => {
     const hoje = new Date().toISOString().split('T')[0];
 
-    // 1. Tenta entregar o que está congelado (Eficiência)
+    // Entrega dados congelados se existirem
     if (dadosCongelados && dataDoCongelamento === hoje) {
-        console.log("Entregando dados da memória (Congelados)");
-        return res.json({ status: "Sucesso (Cache)", liga: "Brasileirão Série B", jogos: dadosCongelados });
+        return res.json({ status: "Sucesso (Cache)", ligas: dadosCongelados });
     }
 
-    // 2. Se não tem ou mudou o dia, busca na API
     try {
-        console.log("Buscando Série B na API...");
-        const url = `${API_URL}/fixtures?league=71&season=2026&date=${hoje}`;
+        // Busca geral para o Brasil
+        const url = `${API_URL}/fixtures?country=Brazil&date=${hoje}`;
         const response = await axios.get(url, { headers: { 'x-apisports-key': API_KEY } });
         
         const confrontos = response.data.response;
+
         if (!confrontos || confrontos.length === 0) {
-            return res.json({ status: "Sucesso", mensagem: "Nenhum jogo da Série B hoje.", ligas: [] });
+            return res.json({ status: "Sucesso", mensagem: "Nenhum jogo encontrado na grade brasileira hoje.", ligas: [] });
         }
 
-        // 3. Aplica a Matemática de Poisson
-        const jogosProcessados = confrontos.map(jogo => {
-            const mCasa = 1.6; // Média estimada
-            const mFora = 1.1;
-            let probV = 0;
-            for(let i=1; i<=3; i++) probV += calcularPoisson(mCasa, i);
+        // Processamento com Poisson
+        const painelLigas = {};
+        confrontos.forEach(jogo => {
+            const nomeLiga = jogo.league.name.toUpperCase();
+            if (!painelLigas[nomeLiga]) painelLigas[nomeLiga] = [];
+            
+            // Calculando probabilidades simples para o painel
+            const mediaCasa = 1.4;
+            const mediaFora = 1.1;
+            const probVitoria = (calcularPoisson(mediaCasa, 1) * 100).toFixed(0);
 
-            return {
+            painelLigas[nomeLiga].push({
                 casa: jogo.teams.home.name,
                 fora: jogo.teams.away.name,
-                probVitoria: (probV * 100).toFixed(0) + "%"
-            };
+                horario: jogo.fixture.date.split('T')[1].substring(0, 5),
+                prob: `${probVitoria}%`
+            });
         });
 
-        // 4. Congela o resultado para o resto do dia
-        dadosCongelados = jogosProcessados;
+        // Congela os dados processados
+        dadosCongelados = Object.keys(painelLigas).map(nome => ({ nome, jogos: painelLigas[nome] }));
         dataDoCongelamento = hoje;
 
-        res.json({ status: "Sucesso (Nova Consulta)", liga: "Brasileirão Série B", jogos: jogosProcessados });
+        res.json({ status: "Sucesso (Nova Consulta)", ligas: dadosCongelados });
 
     } catch (e) {
-        res.status(500).json({ erro: e.message });
+        res.status(500).json({ erro: "Falha ao buscar dados", detalhe: e.message });
     }
 });
 
-app.listen(3000, () => console.log("Servidor Série B Congelado ativo!"));
+app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
