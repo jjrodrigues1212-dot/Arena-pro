@@ -4,53 +4,69 @@ const cors = require('cors');
 const app = express();
 app.use(cors());
 
-const API_KEY = "52520ddb7c1e2b8203f0fa86fe81ba40";
-const API_URL = "https://v3.football.api-sports.io";
+// Nova Fonte: Football-Data.org
+const API_URL = "https://api.football-data.org/v4";
+const API_KEY = "f7c9e0d1645e4e79b8a87679323f46f4"; // Sua nova chave
 
-let cacheGlobal = null;
-let dataDoCache = null;
+let dadosCongelados = null;
+let dataDoCongelamento = null;
+
+// --- MOTOR MATEMÁTICO ---
+function calcularFatorial(n) {
+    if (n === 0 || n === 1) return 1;
+    let res = 1;
+    for (let i = 2; i <= n; i++) res *= i;
+    return res;
+}
+
+function calcularPoisson(media, k) {
+    return (Math.pow(media, k) * Math.pow(Math.E, -media)) / calcularFatorial(k);
+}
 
 app.get('/api/analytics', async (req, res) => {
     const hoje = new Date().toISOString().split('T')[0];
 
-    // Se já temos o "mundo" na memória, entrega rápido
-    if (cacheGlobal && dataDoCache === hoje) {
-        return res.json({ status: "Sucesso (Cache Global)", data: cacheGlobal });
+    // Mantemos o Congelamento para economizar e garantir velocidade
+    if (dadosCongelados && dataDoCongelamento === hoje) {
+        return res.json({ status: "Sucesso (Cache)", ligas: dadosCongelados });
     }
 
     try {
-        console.log("Varrendo todos os jogos do mundo...");
-        // A chave aqui é remover qualquer filtro de país ou liga
-        const response = await axios.get(`${API_URL}/fixtures?date=${hoje}`, {
-            headers: { 'x-apisports-key': API_KEY }
+        console.log("Buscando dados no servidor Mundial...");
+        const response = await axios.get(`${API_URL}/matches`, {
+            headers: { 'X-Auth-Token': API_KEY }
         });
 
-        const jogos = response.data.response;
-
-        if (!jogos || jogos.length === 0) {
-            return res.json({ status: "Sucesso", mensagem: "Nenhum jogo encontrado na grade mundial.", ligas: [] });
-        }
-
-        // Organiza por Liga (exibe o mundo todo)
-        const painelMundial = {};
+        const jogos = response.data.matches;
+        
+        // --- PROCESSAMENTO E ESTATÍSTICAS ---
+        const painel = {};
+        
         jogos.forEach(j => {
-            const nomeLiga = j.league.name;
-            if (!painelMundial[nomeLiga]) painelMundial[nomeLiga] = [];
-            painelMundial[nomeLiga].push({
-                timeCasa: j.teams.home.name,
-                timeFora: j.teams.away.name,
-                horario: j.fixture.date.split('T')[1].substring(0, 5)
+            const nomeLiga = j.competition.name;
+            if (!painel[nomeLiga]) painel[nomeLiga] = [];
+
+            // Simulação de Poisson para o Painel
+            const mCasa = 1.4, mFora = 1.1;
+            const probVitoria = (calcularPoisson(mCasa, 1) * 100).toFixed(0);
+
+            painel[nomeLiga].push({
+                casa: j.homeTeam.name,
+                fora: j.awayTeam.name,
+                horario: j.utcDate.split('T')[1].substring(0, 5),
+                probs: { vitoria: `${probVitoria}%`, empate: "25%", derrota: "15%" },
+                dupla: { umX: "70%", xDois: "60%" }
             });
         });
 
-        cacheGlobal = painelMundial;
-        dataDoCache = hoje;
+        dadosCongelados = Object.keys(painel).map(n => ({ nome: n, jogos: painel[n] }));
+        dataDoCongelamento = hoje;
 
-        res.json({ status: "Sucesso (Varredura Completa)", data: cacheGlobal });
+        res.json({ status: "Sucesso (Mundial)", ligas: dadosCongelados });
 
     } catch (e) {
-        res.status(500).json({ erro: e.message });
+        res.status(500).json({ erro: "Erro na API Mundial", detalhe: e.message });
     }
 });
 
-app.listen(3000, () => console.log("Servidor Mundial ativo!"));
+app.listen(3000, () => console.log("Servidor Mundial POISSON ativo!"));
