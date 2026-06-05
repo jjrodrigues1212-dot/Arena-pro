@@ -6,61 +6,71 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 
-const API_URL = "https://v3.football.api-sports.io";
 const API_KEY = "52520ddb7c1e2b8203f0fa86fe81ba40";
+const API_URL = "https://v3.football.api-sports.io";
+
+// Variáveis que "congelam" os dados na memória
+let dadosCongelados = null;
+let dataDoCongelamento = null;
+
+// Funções de cálculo
+function calcularFatorial(n) {
+    if (n === 0 || n === 1) return 1;
+    let resultado = 1;
+    for (let i = 2; i <= n; i++) resultado *= i;
+    return resultado;
+}
+
+function calcularPoisson(media, k) {
+    return (Math.pow(media, k) * Math.pow(Math.E, -media)) / calcularFatorial(k);
+}
 
 app.get('/api/analytics', async (req, res) => {
-    try {
-        const dataHoje = new Date();
-        const hoje = dataHoje.toLocaleDateString("pt-BR", {
-            timeZone: "America/Sao_Paulo",
-            year: "numeric",
-            month: "2-digit",
-            day: "2-digit"
-        }).split('/').reverse().join('-');
+    const hoje = new Date().toLocaleDateString("pt-BR", {
+        timeZone: "America/Sao_Paulo",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit"
+    }).split('/').reverse().join('-');
 
-        // Busca global sem filtrar por país ou liga específica
-        const resposta = await axios.get(`${API_URL}/fixtures?date=${hoje}&timezone=America/Sao_Paulo`, {
+    // Se já tivermos dados de hoje, não chama a API, entrega o congelado!
+    if (dadosCongelados && dataDoCongelamento === hoje) {
+        console.log("Entregando dados congelados da memória.");
+        return res.json({ status: "Sucesso (Congelado)", ligas: dadosCongelados });
+    }
+
+    try {
+        console.log(`Buscando dados na API para: ${hoje}`);
+        const response = await axios.get(`${API_URL}/fixtures?date=${hoje}&timezone=America/Sao_Paulo`, {
             headers: { 'x-apisports-key': API_KEY }
         });
 
-        const confrontos = resposta.data.response;
-        
+        const confrontos = response.data.response;
         if (!confrontos || confrontos.length === 0) {
-            return res.json({ status: "Sucesso", mensagem: `Nenhum jogo encontrado na API para a data: ${hoje}`, ligas: [] });
+            return res.json({ status: "Sucesso", mensagem: "Nenhum jogo encontrado na API.", ligas: [] });
         }
 
+        // Processamento completo
         const painelLigas = {};
-        
-        // Processa os 20 primeiros jogos disponíveis na grade global do dia
-        const listaProcessada = confrontos.slice(0, 20);
-
-        for (const jogo of listaProcessada) {
+        confrontos.forEach(jogo => {
             const nomeLiga = jogo.league.name.toUpperCase();
-            const timeCasa = jogo.teams.home.name;
-            const timeFora = jogo.teams.away.name;
-            const horario = jogo.fixture.date.split('T')[1].substring(0, 5);
-
-            const jogoFormatado = {
-                casa: timeCasa,
-                fora: timeFora,
-                horario: horario,
-                probs: { casa: 33, empate: 33, fora: 34 },
-                dupla: { umX: 66, xDois: 66, umDois: 90 },
-                gols: { mais25: 50 },
-                btts: 50,
-                escanteios: "10.5",
-                chutesTotais: 20
-            };
-
+            // ... (lógica do Poisson aqui)
             if (!painelLigas[nomeLiga]) painelLigas[nomeLiga] = [];
-            painelLigas[nomeLiga].push(jogoFormatado);
-        }
+            painelLigas[nomeLiga].push({
+                casa: jogo.teams.home.name,
+                fora: jogo.teams.away.name,
+                horario: jogo.fixture.date.split('T')[1].substring(0, 5)
+            });
+        });
 
-        res.json({ status: "Sucesso", ligas: Object.keys(painelLigas).map(nome => ({ nome, jogos: painelLigas[nome] })) });
+        // Congela o resultado
+        dadosCongelados = Object.keys(painelLigas).map(nome => ({ nome, jogos: painelLigas[nome] }));
+        dataDoCongelamento = hoje;
 
-    } catch (erro) {
-        res.status(500).json({ erro: "Falha na conexão com a API", detalhes: erro.message });
+        res.json({ status: "Sucesso (Primeira Busca)", ligas: dadosCongelados });
+
+    } catch (error) {
+        res.status(500).json({ erro: "Erro na API", detalhe: error.message });
     }
 });
 
