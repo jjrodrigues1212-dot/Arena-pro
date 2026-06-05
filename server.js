@@ -7,10 +7,11 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 
 const API_URL = "https://v3.football.api-sports.io";
-const API_KEY = "52520ddb7c1e2b8203f0fa86fbf8lba40";
+// SUA CHAVE PERFEITA E VALIDADA POR VOCÊ:
+const API_KEY = "52520ddb7c1e2b8203f0fa86fe81ba40";
 
 app.get('/', (req, res) => {
-    res.send("Servidor Arena-pro ativo e rodando em modo de teste com dados de Maio!");
+    res.send("Servidor Arena-pro ativo e rodando com dados automatizados!");
 });
 
 function calcularFatorial(n) {
@@ -27,8 +28,12 @@ function calcularPoisson(media, k) {
 
 app.get('/api/analytics', async (req, res) => {
     try {
-        // TRAVAMOS A DATA EM UM DOMINGO DE BRASILEIRÃO PARA TESTAR SE OS JOGOS APARECEM:
-        const hoje = "2026-05-17";
+        // Pega a data de hoje automaticamente no fuso do Brasil
+        const dataBrasil = new Date(new Date().toLocaleString("en-US", {timeZone: "America/Sao_Paulo"}));
+        const ano = dataBrasil.getFullYear();
+        const mes = String(dataBrasil.getMonth() + 1).padStart(2, '0');
+        const dia = String(dataBrasil.getDate()).padStart(2, '0');
+        const hoje = `${ano}-${mes}-${dia}`;
         
         const respostaJogos = await axios.get(`${API_URL}/fixtures?date=${hoje}`, {
             headers: { 'x-apisports-key': API_KEY }
@@ -37,7 +42,7 @@ app.get('/api/analytics', async (req, res) => {
         const confrontos = respostaJogos.data.response;
         
         if (!confrontos || confrontos.length === 0) {
-            return res.json({ status: "Sucesso", mensagem: "Nenhum jogo agendado na API para a data selecionada.", ligas: [] });
+            return res.json({ status: "Sucesso", mensagem: "Nenhum jogo agendado na API para o dia de hoje.", ligas: [] });
         }
 
         const painelLigas = {};
