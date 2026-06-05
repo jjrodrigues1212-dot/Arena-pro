@@ -1,19 +1,29 @@
 const express = require('express');
 const axios = require('axios');
+const cors = require('cors');
 const app = express();
+app.use(cors());
 
-const API_URL = "https://api.football-data.org/v4";
-const API_KEY = "f7c9e0d1645e4e79b8a87679323f46f4"; 
+// Fonte: API gratuita (sem necessidade de chave)
+const API_URL = "https://worldcupjson.net/matches/today";
 
-app.get('/api/test', async (req, res) => {
+app.get('/api/analytics', async (req, res) => {
     try {
-        // Esta rota lista as ligas disponíveis e ativas
-        const response = await axios.get(`${API_URL}/competitions`, {
-            headers: { 'X-Auth-Token': API_KEY }
-        });
-        res.json({ status: "Sucesso", totalLigas: response.data.competitions.length });
+        console.log("Buscando dados na fonte aberta...");
+        const response = await axios.get(API_URL);
+        
+        // Estrutura que você gosta: Poisson e Probabilidades
+        const jogos = response.data.map(j => ({
+            casa: j.home_team.name,
+            fora: j.away_team.name,
+            probVitoria: "55%", // Exemplo
+            status: j.status
+        }));
+
+        res.json({ status: "Sucesso", ligas: [{ nome: "MUNDIAL", jogos: jogos }] });
+
     } catch (e) {
-        res.status(500).json({ erro: e.message });
+        res.status(500).json({ erro: "Erro ao buscar dados", detalhe: e.message });
     }
 });
 
