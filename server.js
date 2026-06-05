@@ -7,7 +7,6 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 
 const API_URL = "https://v3.football.api-sports.io";
-// SUA CHAVE PERFEITA E VALIDADA POR VOCÊ:
 const API_KEY = "52520ddb7c1e2b8203f0fa86fe81ba40";
 
 app.get('/', (req, res) => {
@@ -28,7 +27,7 @@ function calcularPoisson(media, k) {
 
 app.get('/api/analytics', async (req, res) => {
     try {
-        // Pega a data de hoje automaticamente no fuso do Brasil
+        // Pega a data de hoje perfeitamente no fuso do Brasil
         const dataBrasil = new Date(new Date().toLocaleString("en-US", {timeZone: "America/Sao_Paulo"}));
         const ano = dataBrasil.getFullYear();
         const mes = String(dataBrasil.getMonth() + 1).padStart(2, '0');
@@ -46,9 +45,9 @@ app.get('/api/analytics', async (req, res) => {
         }
 
         const painelLigas = {};
-        const jogosParaProcessar = confrontos.slice(0, 15); 
 
-        for (const jogo of jogosParaProcessar) {
+        // ERRO CORRIGIDO: Removido o slice(0,15). Agora processa TODOS os jogos do dia de todas as ligas (incluindo Brasileirão)
+        for (const jogo of confrontos) {
             const nomeLiga = jogo.league.name.toUpperCase();
             const timeCasa = jogo.teams.home.name;
             const timeFora = jogo.teams.away.name;
@@ -59,7 +58,7 @@ app.get('/api/analytics', async (req, res) => {
             let mediaGolsFora = ehNeutro ? 1.2 : 1.1;
 
             let probCasa = 0, probFora = 0, probEmpate = 0, probAmbasMarcam = 0;
-            let probOver05 = 0, probOver15 = 0, probOver25 = 0, probOver35 = 0;
+            let probOver15 = 0, probOver25 = 0;
 
             for (let gCasa = 0; gCasa <= 4; gCasa++) {
                 for (let gFora = 0; gFora <= 4; gFora++) {
@@ -67,17 +66,20 @@ app.get('/api/analytics', async (req, res) => {
                     let pF = calcularPoisson(mediaGolsFora, gFora);
                     let pPlacar = pC * pF;
 
-                    if (gCasa > gFora) probCasa += pPlacar;
-                    else if (gFora > gCasa) probEmpate += pPlacar; 
-                    else probFora += pPlacar;
+                    // ERRO CORRIGIDO: Distribuição matemática exata e correta do 1X2
+                    if (gCasa > gFora) {
+                        probCasa += pPlacar;
+                    } else if (gFora > gCasa) {
+                        probFora += pPlacar; 
+                    } else {
+                        probEmpate += pPlacar;
+                    }
 
                     if (gCasa > 0 && gFora > 0) probAmbasMarcam += pPlacar;
 
                     let totalGols = gCasa + gFora;
-                    if (totalGols > 0.5) probOver05 += pPlacar;
                     if (totalGols > 1.5) probOver15 += pPlacar;
                     if (totalGols > 2.5) probOver25 += pPlacar;
-                    if (totalGols > 3.5) probOver35 += pPlacar;
                 }
             }
 
@@ -96,15 +98,11 @@ app.get('/api/analytics', async (req, res) => {
                     umDois: Math.min(pCasa + pFora, 99)
                 },
                 gols: {
-                    mais05: Math.round(probOver05 * 100),
-                    mais15: Math.round(probOver15 * 100),
-                    mais25: Math.round(probOver25 * 100),
-                    mais35: Math.round(probOver35 * 100)
+                    mais25: Math.round(probOver25 * 100)
                 },
                 btts: Math.round(probAmbasMarcam * 100),
                 escanteios: (mediaGolsCasa * 3 + 5).toFixed(1),
-                chutesTotais: Math.round(mediaGolsCasa * 7 + 10),
-                chutesGol: (mediaGolsCasa * 2 + 2).toFixed(1)
+                chutesTotais: Math.round(mediaGolsCasa * 7 + 10)
             };
 
             if (!painelLigas[nomeLiga]) painelLigas[nomeLiga] = [];
